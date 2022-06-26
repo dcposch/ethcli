@@ -1,26 +1,24 @@
-package action
+package act
 
 import (
-	"log"
+	"context"
 	"strings"
 
-	"dcposch.eth/cli/v2/eth"
+	"dcposch.eth/cli/util"
 	"github.com/ethereum/go-ethereum/common"
 )
 
-var (
-	client   *eth.Client
-	tab      TabState
-	renderer func(*TabState)
-)
-
-func Init(_client *eth.Client, _renderer func(*TabState)) {
-	client = _client
-	renderer = _renderer
+type Action interface {
+	Run()
 }
 
-func SetUrl(url string) {
-	log.Printf("action SetUrl %s\n", url)
+type ActSetUrl struct {
+	Url string
+}
+
+func (a *ActSetUrl) Run() {
+	url := a.Url
+	tab := &state.Tab
 
 	tab.EnteredAddr = url
 	tab.ErrorText = ""
@@ -45,5 +43,14 @@ func SetUrl(url string) {
 }
 
 func render() {
-	renderer(&tab)
+	renderer(&state)
+}
+
+func reloadChainState() {
+	cid, err := client.Ec.ChainID(context.Background())
+	util.Must(err)
+	state.Chain.ChainID = cid.Int64()
+}
+
+func reloadTabState() {
 }

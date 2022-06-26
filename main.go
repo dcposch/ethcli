@@ -6,10 +6,10 @@ import (
 	"log"
 	"os"
 
-	"dcposch.eth/cli/v2/action"
-	"dcposch.eth/cli/v2/eth"
-	"dcposch.eth/cli/v2/ui"
-	"dcposch.eth/cli/v2/util"
+	"dcposch.eth/cli/act"
+	"dcposch.eth/cli/eth"
+	"dcposch.eth/cli/ui"
+	"dcposch.eth/cli/util"
 )
 
 type Opts struct {
@@ -24,7 +24,7 @@ func main() {
 	client := eth.CreateClient(opts.ethRpcUrl)
 
 	// Initialize browser state. One-way data flow: action > state > render.
-	action.Init(client, ui.Render)
+	act.Init(client, ui.Render)
 
 	// Show a terminal dapp browser
 	ui.StartRenderer()

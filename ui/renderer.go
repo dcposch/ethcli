@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"log"
 
-	"dcposch.eth/cli/v2/action"
-	"dcposch.eth/cli/v2/util"
+	"dcposch.eth/cli/act"
+	"dcposch.eth/cli/util"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
@@ -16,7 +16,7 @@ const (
 )
 
 var (
-	lastState   *action.TabState
+	lastState   *act.State
 	urlInput    *tview.InputField
 	chainStatus *tview.TextView
 	mainContent *tview.TextView
@@ -52,14 +52,19 @@ func StartRenderer() {
 
 func onDoneUrlInput(key tcell.Key) {
 	if key == tcell.KeyEnter {
-		action.SetUrl(urlInput.GetText())
+		act.Dispatch(&act.ActSetUrl{Url: urlInput.GetText()})
 	} else {
-		urlInput.SetText(lastState.EnteredAddr)
+		urlInput.SetText(lastState.Tab.EnteredAddr)
 	}
 }
 
-func Render(tab *action.TabState) {
-	log.Printf("ui Render")
+func Render(state *act.State) {
+	log.Printf("ui Render %#v", state)
+	renderTab(&state.Tab)
+	lastState = state
+}
+
+func renderTab(tab *act.TabState) {
 	if tab.EnteredAddr == "" {
 		footer.SetText("Enter a contract address to begin")
 	} else if tab.ContractAddr == nil && tab.ErrorText == "" {
@@ -69,6 +74,4 @@ func Render(tab *action.TabState) {
 	} else {
 		footer.SetText(fmt.Sprintf("Error: %s", tab.ErrorText))
 	}
-
-	lastState = tab
 }

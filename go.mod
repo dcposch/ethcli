@@ -1,4 +1,4 @@
-module dcposch.eth/cli/v2
+module dcposch.eth/cli
 
 go 1.18
 
