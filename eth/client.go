@@ -1,8 +1,6 @@
 package eth
 
 import (
-	"fmt"
-
 	"dcposch.eth/cli/v2/util"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -25,10 +23,5 @@ func CreateClient(ethRpcUrl string) *Client {
 
 func (c *Client) Resolve(ensName string) (addr common.Address, err error) {
 	addr, err = ens.Resolve(c.Ec, ensName)
-	if err != nil {
-		fmt.Println(err)
-	} else {
-		fmt.Println(addr)
-	}
 	return
 }
