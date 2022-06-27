@@ -97,18 +97,24 @@ func renderTab(tab *act.TabState) {
 	} else {
 		footer.SetText(fmt.Sprintf("Error: %s", tab.ErrorText))
 	}
+
+	if tab.Vdom == nil {
+		mainContent.SetText(tab.ErrorText)
+	} else {
+		mainContent.SetText(string(tab.Vdom))
+	}
 }
 
 func renderChain(chain *act.ChainState) {
 	// TODO: there has to be a better way to detect address 0x0
-	if chain.Account.Add.Hash().Big().Cmp(big.NewInt(0)) == 0 {
+	if chain.Account.Addr.Hash().Big().Cmp(big.NewInt(0)) == 0 {
 		chainAccount.SetText("Not logged in")
 	} else {
 		chainAccount.SetText(chain.Account.Disp())
 	}
 
 	if chain.Conn.ErrorText == "" {
-		statusText := fmt.Sprintf("CONNECTED - %d", chain.Conn.ChainID)
+		statusText := fmt.Sprintf("CONNECTED - %s", chain.Conn.ChainName)
 		chainConnStatus.SetText(statusText).SetBackgroundColor(colReset)
 	} else {
 		chainConnStatus.SetText("DISCONNECTED").SetBackgroundColor(bgErr)

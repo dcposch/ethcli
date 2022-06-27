@@ -15,9 +15,9 @@ contract UniswapFrontend is IFrontend {
         override
         returns (VdomElem[] memory vdom)
     {
-        require(appState.length == 0);
+        require(appState.length == 0, "Unexpected state");
 
-        vdom = new VdomElem[](3);
+        vdom = new VdomElem[](5);
         vdom[0].typeHash = TYPE_TEXT;
         vdom[0].data = bytes("HELLO WORLD");
 

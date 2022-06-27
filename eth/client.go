@@ -1,11 +1,17 @@
 package eth
 
 import (
+	"fmt"
+	"log"
+	"strings"
 	"time"
 
 	"dcposch.eth/cli/util"
+	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/params"
 	ens "github.com/wealdtech/go-ens/v3"
 	"golang.org/x/net/context"
 )
@@ -28,14 +34,19 @@ func (c *Client) ConnStatus() ConnStatus {
 	ctx, _ := context.WithTimeout(context.Background(), time.Second)
 	cid, err := c.Ec.ChainID(ctx)
 	if err != nil {
-		return ConnStatus{0, err.Error()}
+		return ConnStatus{0, "", err.Error()}
 	} else {
-		return ConnStatus{cid.Int64(), ""}
+		name := params.NetworkNames[cid.String()]
+		if name == "" {
+			name = fmt.Sprintf("CHAIN ID %d", cid)
+		}
+		return ConnStatus{cid.Int64(), name, ""}
 	}
 }
 
 type ConnStatus struct {
-	ChainID   int64 // TODO: chain name
+	ChainID   int64
+	ChainName string
 	ErrorText string
 }
 
@@ -44,24 +55,29 @@ func (c *Client) Resolve(ensName string) (addr common.Address, err error) {
 	return
 }
 
-// An address plus ENS name
-type NamedAddr struct {
-	Add  common.Address
-	Name string
-	Err  string
-}
+const abiIFrontendJson = `[{"inputs":[{"internalType":"bytes","name":"appState","type":"bytes"},{"components":[{"internalType":"uint256","name":"buttonId","type":"uint256"},{"internalType":"bytes[]","name":"inputs","type":"bytes[]"}],"internalType":"struct Action","name":"action","type":"tuple"}],"name":"act","outputs":[{"internalType":"bytes","name":"newAppState","type":"bytes"}],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"bytes","name":"appState","type":"bytes"}],"name":"render","outputs":[{"components":[{"internalType":"uint256","name":"typeHash","type":"uint256"},{"internalType":"bytes","name":"data","type":"bytes"}],"internalType":"struct VdomElem[]","name":"vdom","type":"tuple[]"}],"stateMutability":"view","type":"function"}]`
 
-// Displays an address, eg "0x123456..." or "vitalik.eth" or "⚠️ invalid.eth"
-func (a *NamedAddr) Disp() string {
-	ret := ""
-	if a.Err != "" {
-		ret += "⚠️ "
+var abiIFrontend *abi.ABI
+
+func (c *Client) FrontendRender(fromAddr, contractAddr common.Address, appState []byte) (vdom []byte, err error) {
+	if abiIFrontend == nil {
+		abiObj, err := abi.JSON(strings.NewReader(abiIFrontendJson))
+		util.Must(err)
+		abiIFrontend = &abiObj
 	}
-	if a.Name != "" {
-		ret += a.Name
-	} else {
-		hex := a.Add.Hex()
-		ret += hex[0:8] + "…" + hex[36:]
+
+	data, err := abiIFrontend.Pack("render", appState)
+	if err != nil {
+		return nil, err
 	}
-	return ret
+
+	log.Printf("eth FrontendRender %s", contractAddr)
+	callMsg := ethereum.CallMsg{
+		From: fromAddr,
+		To:   &contractAddr,
+		Data: data,
+	}
+	result, err := c.Ec.CallContract(context.Background(), callMsg, nil)
+
+	return result, err
 }

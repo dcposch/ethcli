@@ -31,17 +31,13 @@ func run() {
 	reloadChainState()
 	render()
 
-	ticker := time.NewTicker(time.Second)
+	ticker := time.NewTicker(time.Second * 10)
 	for {
 		select {
 		case a := <-queue:
 			a.Run()
-		case t := <-ticker.C:
-			if t.Unix()%10 == 0 {
-				reloadChainState()
-			} else {
-				reloadTabState()
-			}
+		case <-ticker.C:
+			reloadChainState()
 			render()
 		}
 	}

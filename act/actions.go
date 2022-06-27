@@ -38,11 +38,7 @@ func (a *ActSetUrl) Run() {
 		tab.EnteredAddr = ""
 	}
 
-	render()
-}
-
-func render() {
-	renderer(&state)
+	reloadTab()
 }
 
 func reloadChainState() {
@@ -50,5 +46,25 @@ func reloadChainState() {
 	state.Chain.Account = eth.NamedAddr{}
 }
 
-func reloadTabState() {
+func reloadTab() {
+	if state.Tab.ContractAddr == nil {
+		return
+	}
+
+	appState := []byte{}
+	vdom, err := client.FrontendRender(state.Chain.Account.Addr, *state.Tab.ContractAddr, appState)
+	if err == nil {
+		// TODO: vdom diffing
+		state.Tab.Vdom = vdom
+		state.Tab.ErrorText = ""
+	} else {
+		state.Tab.Vdom = nil
+		state.Tab.ErrorText = err.Error()
+	}
+
+	render()
+}
+
+func render() {
+	renderer(&state)
 }

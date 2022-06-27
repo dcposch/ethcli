@@ -24,4 +24,5 @@ type TabState struct {
 	EnteredAddr  string
 	ContractAddr *common.Address
 	ErrorText    string
+	Vdom         []byte
 }
