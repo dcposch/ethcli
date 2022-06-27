@@ -3,9 +3,9 @@ package ui
 import (
 	"fmt"
 	"log"
-	"math/big"
 
 	"dcposch.eth/cli/act"
+	"dcposch.eth/cli/eth"
 	"dcposch.eth/cli/util"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -106,8 +106,7 @@ func renderTab(tab *act.TabState) {
 }
 
 func renderChain(chain *act.ChainState) {
-	// TODO: there has to be a better way to detect address 0x0
-	if chain.Account.Addr.Hash().Big().Cmp(big.NewInt(0)) == 0 {
+	if eth.IsZeroAddr(chain.Account.Addr) {
 		chainAccount.SetText("Not logged in")
 	} else {
 		chainAccount.SetText(chain.Account.Disp())

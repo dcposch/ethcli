@@ -7,10 +7,10 @@ import (
 	"log"
 	"os"
 
-	"dcposch.eth/cli/act"
 	"dcposch.eth/cli/eth"
-	"dcposch.eth/cli/ui"
 	"dcposch.eth/cli/util"
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
@@ -28,10 +28,31 @@ func main() {
 	client := eth.CreateClient(opts.ethRpcUrl)
 
 	// Initialize browser state. One-way data flow: action > state > render.
-	act.Init(client, ui.Render)
+	// act.Init(client, ui.Render)
+
+	vdom, err := client.FrontendRender(common.Address{}, common.HexToAddress("0xa51e457bab8f571ccf72327be0787f32491deac0"), []byte{})
+	util.Must(err)
+
+	for _, v := range vdom {
+		switch v.TypeHash {
+		case eth.TypeText:
+			fmt.Printf("Text: %s\n", string(v.Data))
+		case eth.TypeInAmount:
+			n := abi.ReadInteger(abi.Type{T: abi.UintTy, Size: 64}, v.Data).(uint64)
+			fmt.Printf("Amount: %d %x\n", n, v.Data)
+		case eth.TypeInDropdown:
+			fmt.Printf("Dropdown: %d bytes\n", len(v.Data))
+		case eth.TypeInTextbox:
+			fmt.Printf("Textbox: %d bytes\n", len(v.Data))
+		case eth.TypeButton:
+			fmt.Printf("Button: %x\n", v.Data)
+		default:
+			fmt.Printf("UKNOWN %d: %d bytes\n", v.TypeHash, len(v.Data))
+		}
+	}
 
 	// Show a terminal dapp browser
-	ui.StartRenderer()
+	// ui.StartRenderer()
 }
 
 // Returns either valid options or exits printing an error message.

@@ -55,11 +55,11 @@ func (c *Client) Resolve(ensName string) (addr common.Address, err error) {
 	return
 }
 
-const abiIFrontendJson = `[{"inputs":[{"internalType":"bytes","name":"appState","type":"bytes"},{"components":[{"internalType":"uint256","name":"buttonId","type":"uint256"},{"internalType":"bytes[]","name":"inputs","type":"bytes[]"}],"internalType":"struct Action","name":"action","type":"tuple"}],"name":"act","outputs":[{"internalType":"bytes","name":"newAppState","type":"bytes"}],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"bytes","name":"appState","type":"bytes"}],"name":"render","outputs":[{"components":[{"internalType":"uint256","name":"typeHash","type":"uint256"},{"internalType":"bytes","name":"data","type":"bytes"}],"internalType":"struct VdomElem[]","name":"vdom","type":"tuple[]"}],"stateMutability":"view","type":"function"}]`
+const abiIFrontendJson = `[{"inputs":[{"internalType":"bytes","name":"appState","type":"bytes"},{"components":[{"internalType":"uint256","name":"buttonId","type":"uint256"},{"internalType":"bytes[]","name":"inputs","type":"bytes[]"}],"internalType":"struct Action","name":"action","type":"tuple"}],"name":"act","outputs":[{"internalType":"bytes","name":"newAppState","type":"bytes"}],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"bytes","name":"appState","type":"bytes"}],"name":"render","outputs":[{"components":[{"internalType":"uint64","name":"typeHash","type":"uint64"},{"internalType":"bytes","name":"data","type":"bytes"}],"internalType":"struct VdomElem[]","name":"vdom","type":"tuple[]"}],"stateMutability":"view","type":"function"}]`
 
 var abiIFrontend *abi.ABI
 
-func (c *Client) FrontendRender(fromAddr, contractAddr common.Address, appState []byte) (vdom []byte, err error) {
+func (c *Client) FrontendRender(fromAddr, contractAddr common.Address, appState []byte) (vdom []VdomElem, err error) {
 	if abiIFrontend == nil {
 		abiObj, err := abi.JSON(strings.NewReader(abiIFrontendJson))
 		util.Must(err)
@@ -77,7 +77,13 @@ func (c *Client) FrontendRender(fromAddr, contractAddr common.Address, appState 
 		To:   &contractAddr,
 		Data: data,
 	}
-	result, err := c.Ec.CallContract(context.Background(), callMsg, nil)
+	vdomBytes, err := c.Ec.CallContract(context.Background(), callMsg, nil)
+	if err != nil {
+		return nil, err
+	}
 
-	return result, err
+	var vdomArr []VdomElem
+	err = abiIFrontend.UnpackIntoInterface(&vdomArr, "render", vdomBytes)
+
+	return vdomArr, err
 }

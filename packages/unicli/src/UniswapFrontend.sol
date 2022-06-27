@@ -31,7 +31,7 @@ contract UniswapFrontend is IFrontend {
         vdom[3].data = abi.encode(DataDropdown("Token out", _tokens()));
 
         vdom[4].typeHash = TYPE_BUTTON;
-        vdom[4].data = bytes("Swap");
+        vdom[4].data = abi.encode(DataButton("Swap"));
 
         // for (uint256 i = 0; i < 10; i++) {
         //     IUniswapV2Pair pair = IUniswapV2Pair(uniFactory.allPairs(i));
@@ -44,14 +44,14 @@ contract UniswapFrontend is IFrontend {
     }
 
     function _tokens() public pure returns (DataDropOption[] memory ret) {
-        ret = new DataDropOption[](2);
+        ret = new DataDropOption[](3);
 
         ret[0] = DataDropOption(1, "ETH");
-        ret[2] = DataDropOption(
+        ret[1] = DataDropOption(
             0x00f80a32a835f79d7787e8a8ee5721d0feafd78108,
             "DAI"
         );
-        ret[3] = DataDropOption(
+        ret[2] = DataDropOption(
             0x00c778417e063141139fce010982780140aa0cd5ab,
             "WETH"
         );
