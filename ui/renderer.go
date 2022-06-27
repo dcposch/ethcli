@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"log"
+	"strconv"
 
 	"dcposch.eth/cli/act"
 	"dcposch.eth/cli/eth"
@@ -25,12 +26,12 @@ var (
 	urlInput        *tview.InputField
 	chainAccount    *tview.TextView
 	chainConnStatus *tview.TextView
-	mainContent     *tview.TextView
+	mainContent     *tview.Flex
 	footer          *tview.TextView
 )
 
 func StartRenderer() {
-	appLabel := tview.NewTextView().SetTextColor(fgGreen).SetText("ETHEREUM")
+	appLabel := tview.NewTextView().SetTextColor(fgGreen).SetText("ETHEREUM EXPLORER")
 	urlInput = tview.NewInputField().SetLabel("ENS or address: ").SetDoneFunc(onDoneUrlInput)
 
 	chainAccount = tview.NewTextView().SetText("ACCOUNT")
@@ -40,7 +41,8 @@ func StartRenderer() {
 		AddItem(chainAccount, 0, 1, false).
 		AddItem(chainConnStatus, 1, 0, false)
 
-	mainContent = tview.NewTextView().SetTextAlign(tview.AlignCenter)
+	// mainContent = tview.NewTextView().SetTextAlign(tview.AlignCenter)
+	mainContent = tview.NewFlex().SetDirection(tview.FlexColumnCSS)
 
 	footer = tview.NewTextView()
 	footer.SetBackgroundColor(bgDarkGray)
@@ -98,10 +100,27 @@ func renderTab(tab *act.TabState) {
 		footer.SetText(fmt.Sprintf("Error: %s", tab.ErrorText))
 	}
 
+	mainContent.Clear()
 	if tab.Vdom == nil {
-		mainContent.SetText(tab.ErrorText)
+		mainContent.AddItem(tview.NewTextView().SetTextAlign(tview.AlignCenter).SetText(tab.ErrorText), 1, 0, false)
 	} else {
-		mainContent.SetText(string(tab.Vdom))
+		for _, v := range tab.Vdom {
+			mainContent.AddItem(createItem(v), 3, 0, false)
+		}
+	}
+	mainContent.AddItem(tview.NewTextView(), 0, 1, false)
+}
+
+func createItem(v eth.VdomElem) tview.Primitive {
+	switch v.TypeHash {
+	case eth.TypeText:
+		return tview.NewTextView().SetText(v.DataStruct.(string))
+	case eth.TypeInAmount:
+		data := v.DataStruct.(eth.DataAmount)
+		initText := fmt.Sprintf("%0."+strconv.Itoa(int(data.Decimals))+"d", 0)
+		return tview.NewInputField().SetLabel(data.Label).SetText(initText)
+	default:
+		return tview.NewTextView().SetTextColor(bgDarkGray).SetText("Unimplemented")
 	}
 }
 

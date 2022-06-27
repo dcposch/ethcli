@@ -82,8 +82,30 @@ func (c *Client) FrontendRender(fromAddr, contractAddr common.Address, appState 
 		return nil, err
 	}
 
-	var vdomArr []VdomElem
-	err = abiIFrontend.UnpackIntoInterface(&vdomArr, "render", vdomBytes)
+	err = abiIFrontend.UnpackIntoInterface(&vdom, "render", vdomBytes)
+	if err != nil {
+		return nil, err
+	}
 
-	return vdomArr, err
+	for i, v := range vdom {
+		switch v.TypeHash {
+		case TypeText:
+			v.DataStruct = string(v.Data)
+		case TypeInAmount:
+			var dat DataAmount
+			ParseTuple(v.Data, ElemsInAmount, &dat)
+			v.DataStruct = dat
+		case TypeInDropdown:
+			continue
+		case TypeInTextbox:
+			continue
+		case TypeButton:
+			var dat DataBtnAction
+			ParseTuple(v.Data, ElemsButton, &dat)
+		default:
+			continue
+		}
+		vdom[i] = v
+	}
+	return
 }

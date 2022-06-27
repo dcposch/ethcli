@@ -2,7 +2,10 @@ package eth
 
 import (
 	"encoding/binary"
+	"encoding/json"
 
+	"dcposch.eth/cli/util"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
@@ -14,10 +17,41 @@ var (
 	TypeButton     = binary.BigEndian.Uint64(crypto.Keccak256([]byte("button"))[24:])
 )
 
+// const (
+// 	TypeInAmountJson = `{"components":[{"name":"label","type":"string"},{"name":"decimals","type":"uint64"}],"name":"data","type":"tuple"}`
+// )
+
+type ElemTs []abi.ArgumentMarshaling
+
+var (
+	ElemsInAmount = ElemTs{{Name: "label", Type: "string"}, {Name: "decimals", Type: "uint64"}}
+	ElemsButton   = ElemTs{{Name: "text", Type: "string"}}
+)
+
+func ParseTuple(bytes []byte, elems ElemTs, ret interface{}) {
+	typ, err := abi.NewType("tuple", "", elems)
+	util.Must(err)
+
+	// TODO: replace the geth abi-parsing.
+	// It is both hard to use and incredibly ugly. And reflective, likely slow.
+	args := abi.Arguments{{Type: typ}}
+	res, err := args.UnpackValues(bytes)
+	util.Must(err)
+
+	// Ineffective: util.Must(args.Copy(&wrap, res))
+	// As a workaround, round-trip through JSON instead.
+	wrap := []interface{}{ret}
+	js, err := json.Marshal(res)
+	util.Must(err)
+	util.Must(json.Unmarshal(js, &wrap))
+}
+
 type VdomElem struct {
 	TypeHash uint64
 	// Text for a text field, options for a dropdown, etc.
 	Data []byte
+	// Data parsed into a struct. See DataDropdown, etc.
+	DataStruct interface{}
 }
 
 type DataAmount struct {
@@ -39,7 +73,7 @@ type DataDropOption struct {
 	Display string
 }
 
-type Action struct {
+type DataBtnAction struct {
 	// 0 = first button, etc.
 	ButtonId uint64
 	// Value of each input.

@@ -2,4 +2,6 @@ dist/
 out/
 cache/
 broadcast/
+
 .vscode/*.log
+.vscode/launch.json
