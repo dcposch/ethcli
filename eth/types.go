@@ -3,8 +3,8 @@ package eth
 import (
 	"encoding/binary"
 	"encoding/json"
+	"math/big"
 
-	"dcposch.eth/cli/util"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/crypto"
 )
@@ -17,65 +17,91 @@ var (
 	TypeButton     = binary.BigEndian.Uint64(crypto.Keccak256([]byte("button"))[24:])
 )
 
-// const (
-// 	TypeInAmountJson = `{"components":[{"name":"label","type":"string"},{"name":"decimals","type":"uint64"}],"name":"data","type":"tuple"}`
-// )
-
 type ElemTs []abi.ArgumentMarshaling
 
 var (
-	ElemsInAmount = ElemTs{{Name: "label", Type: "string"}, {Name: "decimals", Type: "uint64"}}
-	ElemsButton   = ElemTs{{Name: "text", Type: "string"}}
+	PropsText     = ElemTs{{Name: "key", Type: "uint256"}, {Name: "text", Type: "string"}}
+	PropsAmount   = ElemTs{{Name: "key", Type: "uint256"}, {Name: "label", Type: "string"}, {Name: "decimals", Type: "uint64"}}
+	DropOpt       = ElemTs{{Name: "val", Type: "uint256"}, {Name: "text", Type: "string"}}
+	PropsDropdown = ElemTs{{Name: "key", Type: "uint256"}, {Name: "label", Type: "string"}, {Name: "options", Type: "tuple[]", Components: DropOpt}}
+	PropsButton   = ElemTs{{Name: "key", Type: "uint256"}, {Name: "text", Type: "string"}}
 )
 
-func ParseTuple(bytes []byte, elems ElemTs, ret interface{}) {
+func ParseTuple(bytes []byte, elems ElemTs, ret interface{}) error {
 	typ, err := abi.NewType("tuple", "", elems)
-	util.Must(err)
+	if err != nil {
+		return err
+	}
 
 	// TODO: replace the geth abi-parsing.
 	// It is both hard to use and incredibly ugly. And reflective, likely slow.
 	args := abi.Arguments{{Type: typ}}
 	res, err := args.UnpackValues(bytes)
-	util.Must(err)
+	if err != nil {
+		return err
+	}
 
 	// Ineffective: util.Must(args.Copy(&wrap, res))
 	// As a workaround, round-trip through JSON instead.
 	wrap := []interface{}{ret}
 	js, err := json.Marshal(res)
-	util.Must(err)
-	util.Must(json.Unmarshal(js, &wrap))
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(js, &wrap)
 }
 
-type VdomElem struct {
+// Virtual DOM element.
+// Loosely inspired by React, but radically simplified to fit EVM constraints.
+// The VDOM is a flat list of VElems, not a tree. Styling options are tightly
+// constrained. Focus is on functionality.
+type VElem struct {
 	TypeHash uint64
-	// Text for a text field, options for a dropdown, etc.
+	// Raw ABI-encoded data. Text for a text field, options for a dropdown, etc.
 	Data []byte
-	// Data parsed into a struct. See DataDropdown, etc.
-	DataStruct interface{}
+	// Parsed data. See ElemText, etc.
+	DataElem interface{}
 }
 
-type DataAmount struct {
+type Elem struct {
+	Key big.Int
+}
+
+type ElemText struct {
+	Elem
+	Text string
+}
+
+type ElemAmount struct {
+	Elem
 	Label string
 	// Amount input will return fixed-point uint256 to n decimals.
 	Decimals uint64
 }
 
-type DataDropdown struct {
+type ElemDropdown struct {
+	Elem
 	Label string
 	// Options. User must pick one.
-	Options []DataDropOption
+	Options []ElemDropOption
 }
 
-type DataDropOption struct {
-	// Dropdown option ID
-	Id uint64
+type ElemDropOption struct {
+	// Dropdown option value
+	Val big.Int
 	// Dropdown option display string
 	Display string
 }
 
-type DataBtnAction struct {
-	// 0 = first button, etc.
-	ButtonId uint64
-	// Value of each input.
+type ElemButton struct {
+	Elem
+	// Button label
+	Text string
+}
+
+type ButtonAction struct {
+	// Which button was pressed.
+	ButtonKey uint64
+	// ABI serialization of each input.
 	Inputs [][]byte
 }

@@ -79,7 +79,9 @@ func Render(state *act.State) {
 	if stateStr == lastStateStr {
 		return
 	}
-	log.Printf("ui Render %#v", state)
+	log.Printf("ui Render %#v URL %s %s err '%s' elems %d", state.Chain,
+		state.Tab.EnteredAddr, state.Tab.ContractAddr, state.Tab.ErrorText,
+		len(state.Tab.Vdom))
 
 	renderTab(&state.Tab)
 	renderChain(&state.Chain)
@@ -105,20 +107,21 @@ func renderTab(tab *act.TabState) {
 		mainContent.AddItem(tview.NewTextView().SetTextAlign(tview.AlignCenter).SetText(tab.ErrorText), 1, 0, false)
 	} else {
 		for _, v := range tab.Vdom {
-			mainContent.AddItem(createItem(v), 3, 0, false)
+			mainContent.AddItem(createItem(v.DataElem), 3, 0, false)
 		}
 	}
 	mainContent.AddItem(tview.NewTextView(), 0, 1, false)
 }
 
-func createItem(v eth.VdomElem) tview.Primitive {
-	switch v.TypeHash {
-	case eth.TypeText:
-		return tview.NewTextView().SetText(v.DataStruct.(string))
-	case eth.TypeInAmount:
-		data := v.DataStruct.(eth.DataAmount)
-		initText := fmt.Sprintf("%0."+strconv.Itoa(int(data.Decimals))+"d", 0)
-		return tview.NewInputField().SetLabel(data.Label).SetText(initText)
+func createItem(elem interface{}) tview.Primitive {
+	switch e := elem.(type) {
+	case *eth.ElemText:
+		return tview.NewTextView().SetText(e.Text)
+	case *eth.ElemAmount:
+		initText := fmt.Sprintf("%0."+strconv.Itoa(int(e.Decimals))+"d", 0)
+		return tview.NewInputField().SetLabel(e.Label).SetText(initText)
+	case *eth.ElemButton:
+		return tview.NewButton(e.Text)
 	default:
 		return tview.NewTextView().SetTextColor(bgDarkGray).SetText("Unimplemented")
 	}

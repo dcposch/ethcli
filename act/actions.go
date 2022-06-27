@@ -7,10 +7,13 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+// Represents a single user action.
+// Dispatched from the UI, handled by act.Dispatch()
 type Action interface {
 	Run()
 }
 
+// Navigating, either via link or via the URL bar.
 type ActSetUrl struct {
 	Url string
 }
@@ -23,6 +26,8 @@ func (a *ActSetUrl) Run() {
 	tab.ErrorText = ""
 	tab.ContractAddr = nil
 
+	// Navigation is always to a UI contract.
+	// User either enters an address directly, or an ENS name.
 	if strings.HasSuffix(url, ".eth") {
 		render()
 		result, err := client.Resolve(url)
@@ -41,6 +46,7 @@ func (a *ActSetUrl) Run() {
 	reloadTab()
 }
 
+// Reload context information about the blockchain.
 func reloadChainState() {
 	state.Chain.Conn = client.ConnStatus()
 	state.Chain.Account = eth.NamedAddr{}
@@ -52,7 +58,8 @@ func reloadTab() {
 	}
 
 	appState := []byte{}
-	vdom, err := client.FrontendRender(state.Chain.Account.Addr, *state.Tab.ContractAddr, appState)
+	vdom, err := client.FrontendRender(
+		state.Chain.Account.Addr, *state.Tab.ContractAddr, appState)
 	if err == nil {
 		// TODO: vdom diffing
 		state.Tab.Vdom = vdom
