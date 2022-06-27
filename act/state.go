@@ -13,10 +13,10 @@ type State struct {
 
 // Ethereum chain connection state
 type ChainState struct {
-	// 1 for mainnet, etc
-	ChainID int64
 	// logged-in account, eg vitalik.eth
 	Account eth.NamedAddr
+	// connection status, chain ID, etc
+	Conn eth.ConnStatus
 }
 
 // Tab state

@@ -1,10 +1,9 @@
 package act
 
 import (
-	"context"
 	"strings"
 
-	"dcposch.eth/cli/util"
+	"dcposch.eth/cli/eth"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -47,9 +46,8 @@ func render() {
 }
 
 func reloadChainState() {
-	cid, err := client.Ec.ChainID(context.Background())
-	util.Must(err)
-	state.Chain.ChainID = cid.Int64()
+	state.Chain.Conn = client.ConnStatus()
+	state.Chain.Account = eth.NamedAddr{}
 }
 
 func reloadTabState() {

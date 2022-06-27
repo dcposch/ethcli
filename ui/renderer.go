@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"log"
+	"math/big"
 
 	"dcposch.eth/cli/act"
 	"dcposch.eth/cli/util"
@@ -13,21 +14,31 @@ import (
 const (
 	fgGreen    = tcell.ColorGreen
 	bgDarkGray = tcell.ColorDarkGray
+	bgErr      = tcell.ColorDarkRed
+	colReset   = tcell.ColorReset
 )
 
 var (
-	lastState   *act.State
-	urlInput    *tview.InputField
-	chainStatus *tview.TextView
-	mainContent *tview.TextView
-	footer      *tview.TextView
+	lastState       *act.State
+	lastStateStr    string
+	app             *tview.Application
+	urlInput        *tview.InputField
+	chainAccount    *tview.TextView
+	chainConnStatus *tview.TextView
+	mainContent     *tview.TextView
+	footer          *tview.TextView
 )
 
 func StartRenderer() {
 	appLabel := tview.NewTextView().SetTextColor(fgGreen).SetText("ETHEREUM")
 	urlInput = tview.NewInputField().SetLabel("ENS or address: ").SetDoneFunc(onDoneUrlInput)
 
-	chainStatus = tview.NewTextView()
+	chainAccount = tview.NewTextView().SetText("ACCOUNT")
+	chainConnStatus = tview.NewTextView().SetText("CONN")
+	chainStatus := tview.NewFlex().
+		SetDirection(tview.FlexColumnCSS).
+		AddItem(chainAccount, 0, 1, false).
+		AddItem(chainConnStatus, 1, 0, false)
 
 	mainContent = tview.NewTextView().SetTextAlign(tview.AlignCenter)
 
@@ -45,7 +56,9 @@ func StartRenderer() {
 	grid.AddItem(mainContent, 1, 1, 1, 1, 0, 0, false)
 	grid.AddItem(footer, 2, 0, 1, 2, 0, 0, false)
 
-	app := tview.NewApplication().SetRoot(grid, true).EnableMouse(true)
+	app = tview.NewApplication().
+		SetRoot(grid, true).
+		EnableMouse(true)
 
 	util.Must(app.Run())
 }
@@ -59,9 +72,19 @@ func onDoneUrlInput(key tcell.Key) {
 }
 
 func Render(state *act.State) {
+	// TODO: better diff
+	stateStr := fmt.Sprintf("%#v", state)
+	if stateStr == lastStateStr {
+		return
+	}
 	log.Printf("ui Render %#v", state)
+
 	renderTab(&state.Tab)
+	renderChain(&state.Chain)
+	app.Draw()
+
 	lastState = state
+	lastStateStr = stateStr
 }
 
 func renderTab(tab *act.TabState) {
@@ -73,5 +96,21 @@ func renderTab(tab *act.TabState) {
 		footer.SetText(fmt.Sprintf("Resolved %s", tab.ContractAddr))
 	} else {
 		footer.SetText(fmt.Sprintf("Error: %s", tab.ErrorText))
+	}
+}
+
+func renderChain(chain *act.ChainState) {
+	// TODO: there has to be a better way to detect address 0x0
+	if chain.Account.Add.Hash().Big().Cmp(big.NewInt(0)) == 0 {
+		chainAccount.SetText("Not logged in")
+	} else {
+		chainAccount.SetText(chain.Account.Disp())
+	}
+
+	if chain.Conn.ErrorText == "" {
+		statusText := fmt.Sprintf("CONNECTED - %d", chain.Conn.ChainID)
+		chainConnStatus.SetText(statusText).SetBackgroundColor(colReset)
+	} else {
+		chainConnStatus.SetText("DISCONNECTED").SetBackgroundColor(bgErr)
 	}
 }

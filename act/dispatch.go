@@ -28,6 +28,9 @@ func Dispatch(a Action) {
 }
 
 func run() {
+	reloadChainState()
+	render()
+
 	ticker := time.NewTicker(time.Second)
 	for {
 		select {
@@ -39,6 +42,7 @@ func run() {
 			} else {
 				reloadTabState()
 			}
+			render()
 		}
 	}
 }
