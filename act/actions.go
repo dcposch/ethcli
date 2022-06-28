@@ -1,6 +1,8 @@
 package act
 
 import (
+	"log"
+	"math/big"
 	"strings"
 
 	"dcposch.eth/cli/eth"
@@ -42,8 +44,29 @@ func (a *ActSetUrl) Run() {
 	} else {
 		tab.EnteredAddr = ""
 	}
+	tab.Inputs = make(map[string][]byte)
 
 	reloadTab()
+}
+
+// Update a form input.
+type ActSetInput struct {
+	Key big.Int
+	Val []byte
+}
+
+func (a *ActSetInput) Run() {
+	state.Tab.Inputs[a.Key.String()] = a.Val
+}
+
+// Submit a form.
+type ActSubmit struct {
+	ButtonKey big.Int
+}
+
+func (a *ActSubmit) Run() {
+	// TODO: construct act() transaction
+	log.Printf("act Submit %s %#v", a.ButtonKey.String(), state.Tab.Inputs)
 }
 
 // Reload context information about the blockchain.
@@ -64,6 +87,10 @@ func reloadTab() {
 		// TODO: vdom diffing
 		state.Tab.Vdom = vdom
 		state.Tab.ErrorText = ""
+		for _, v := range vdom {
+			key := v.DataElem.(eth.KeyElem).GetKey()
+			state.Tab.Inputs[key.String()] = []byte{}
+		}
 	} else {
 		state.Tab.Vdom = nil
 		state.Tab.ErrorText = err.Error()

@@ -25,4 +25,5 @@ type TabState struct {
 	ContractAddr *common.Address
 	ErrorText    string
 	Vdom         []eth.VElem
+	Inputs       map[string][]byte
 }

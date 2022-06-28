@@ -3,7 +3,10 @@ package ui
 import (
 	"fmt"
 	"log"
+	"math"
+	"math/big"
 	"strconv"
+	"strings"
 
 	"dcposch.eth/cli/act"
 	"dcposch.eth/cli/eth"
@@ -13,54 +16,66 @@ import (
 )
 
 const (
-	fgGreen    = tcell.ColorGreen
-	bgDarkGray = tcell.ColorDarkGray
-	bgErr      = tcell.ColorDarkRed
-	colReset   = tcell.ColorReset
+	fgGreen  = tcell.ColorGreen
+	bgDark   = tcell.ColorDarkBlue
+	bgGray   = tcell.ColorDarkGray
+	bgErr    = tcell.ColorDarkRed
+	colReset = tcell.ColorReset
 )
 
 var (
-	lastState       *act.State
-	lastStateStr    string
-	app             *tview.Application
-	urlInput        *tview.InputField
-	chainAccount    *tview.TextView
-	chainConnStatus *tview.TextView
-	mainContent     *tview.Flex
-	footer          *tview.TextView
+	lastState        *act.State
+	lastStateStr     string
+	app              *tview.Application
+	urlInput         *tview.InputField
+	chainStatus      *tview.TextView
+	mainContent      *tview.Flex
+	footerConnStatus *tview.TextView
+	footerMain       *tview.TextView
 )
 
 func StartRenderer() {
-	appLabel := tview.NewTextView().SetTextColor(fgGreen).SetText("ETHEREUM EXPLORER")
-	urlInput = tview.NewInputField().SetLabel("ENS or address: ").SetDoneFunc(onDoneUrlInput)
-
-	chainAccount = tview.NewTextView().SetText("ACCOUNT")
-	chainConnStatus = tview.NewTextView().SetText("CONN")
-	chainStatus := tview.NewFlex().
-		SetDirection(tview.FlexColumnCSS).
-		AddItem(chainAccount, 0, 1, false).
-		AddItem(chainConnStatus, 1, 0, false)
-
-	// mainContent = tview.NewTextView().SetTextAlign(tview.AlignCenter)
-	mainContent = tview.NewFlex().SetDirection(tview.FlexColumnCSS)
-
-	footer = tview.NewTextView()
-	footer.SetBackgroundColor(bgDarkGray)
-
 	grid := tview.NewGrid().
 		SetRows(1, 0, 1).
-		SetColumns(32, 0).
+		SetColumns(32, 80, 0).
 		SetBorders(true)
 
+	// Header row
+	appLabel := tview.NewTextView().SetTextColor(fgGreen).SetText("ETHEREUM EXPLORER")
+	urlInput = tview.NewInputField().SetLabel("ENS or address: ").SetDoneFunc(onDoneUrlInput)
 	grid.AddItem(appLabel, 0, 0, 1, 1, 0, 0, false)
 	grid.AddItem(urlInput, 0, 1, 1, 1, 0, 0, true)
+	grid.AddItem(tview.NewTextView(), 0, 2, 1, 1, 0, 0, false)
+
+	// Main row
+	chainStatus = tview.NewTextView().SetText("ACCOUNT")
+	chainStatus.SetBorderPadding(1, 1, 0, 0)
+	mainContent = tview.NewFlex().SetDirection(tview.FlexColumnCSS)
+	mainContent.SetBorderPadding(1, 1, 1, 1)
 	grid.AddItem(chainStatus, 1, 0, 1, 1, 0, 0, false)
 	grid.AddItem(mainContent, 1, 1, 1, 1, 0, 0, false)
-	grid.AddItem(footer, 2, 0, 1, 2, 0, 0, false)
+	grid.AddItem(tview.NewTextView(), 1, 2, 1, 1, 0, 0, false)
+
+	// Footer row
+	footerConnStatus = tview.NewTextView()
+	footerMain = tview.NewTextView()
+	grid.AddItem(footerConnStatus, 2, 0, 1, 1, 0, 0, false)
+	grid.AddItem(footerMain, 2, 1, 1, 1, 0, 0, false)
+	grid.AddItem(tview.NewTextView(), 2, 2, 1, 1, 0, 0, false)
 
 	app = tview.NewApplication().
 		SetRoot(grid, true).
 		EnableMouse(true)
+
+	// Tab order
+	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyTab {
+			moveFocus(1)
+		} else if event.Key() == tcell.KeyBacktab {
+			moveFocus(-1)
+		}
+		return event
+	})
 
 	util.Must(app.Run())
 }
@@ -79,65 +94,159 @@ func Render(state *act.State) {
 	if stateStr == lastStateStr {
 		return
 	}
-	log.Printf("ui Render %#v URL %s %s err '%s' elems %d", state.Chain,
-		state.Tab.EnteredAddr, state.Tab.ContractAddr, state.Tab.ErrorText,
-		len(state.Tab.Vdom))
 
-	renderTab(&state.Tab)
-	renderChain(&state.Chain)
-	app.Draw()
+	app.QueueUpdateDraw(func() {
+		log.Printf("ui Render %#v URL %s %s err '%s' elems %d", state.Chain,
+			state.Tab.EnteredAddr, state.Tab.ContractAddr, state.Tab.ErrorText,
+			len(state.Tab.Vdom))
 
-	lastState = state
-	lastStateStr = stateStr
+		renderTab(&state.Tab)
+		renderChain(&state.Chain)
+		if len(state.Tab.Vdom) > 0 {
+			app.SetFocus(mainContent.GetItem(0))
+		} else {
+			app.SetFocus(urlInput)
+		}
+
+		lastState = state
+		lastStateStr = stateStr
+	})
 }
 
 func renderTab(tab *act.TabState) {
+	footerMain.SetBackgroundColor(bgGray)
 	if tab.EnteredAddr == "" {
-		footer.SetText("Enter a contract address to begin")
+		footerMain.SetText("Enter a contract address to begin")
 	} else if tab.ContractAddr == nil && tab.ErrorText == "" {
-		footer.SetText("Resolving...")
+		footerMain.SetText("Resolving...")
 	} else if tab.ContractAddr != nil {
-		footer.SetText(fmt.Sprintf("Resolved %s", tab.ContractAddr))
+		footerMain.SetText(fmt.Sprintf("Resolved %s", tab.ContractAddr))
 	} else {
-		footer.SetText(fmt.Sprintf("Error: %s", tab.ErrorText))
+		footerMain.SetText(fmt.Sprintf("Error: %s", tab.ErrorText))
+		footerMain.SetBackgroundColor(bgErr)
 	}
 
 	mainContent.Clear()
-	if tab.Vdom == nil {
-		mainContent.AddItem(tview.NewTextView().SetTextAlign(tview.AlignCenter).SetText(tab.ErrorText), 1, 0, false)
-	} else {
+	errText := tab.ErrorText
+	if errText == "" && tab.Vdom != nil {
 		for _, v := range tab.Vdom {
-			mainContent.AddItem(createItem(v.DataElem), 3, 0, false)
+			key := v.DataElem.GetKey()
+			inputVal := tab.Inputs[key.String()]
+			item, err := createItem(v.DataElem, inputVal)
+			if err != nil {
+				errText = err.Error()
+				break
+			}
+			mainContent.AddItem(item, 3, 0, false)
 		}
+	}
+	if errText != "" {
+		mainContent.Clear()
+		errItem := tview.NewTextView().
+			SetTextAlign(tview.AlignCenter).
+			SetText(tab.ErrorText).
+			SetBackgroundColor(bgErr)
+		mainContent.AddItem(errItem, 1, 0, false)
 	}
 	mainContent.AddItem(tview.NewTextView(), 0, 1, false)
 }
 
-func createItem(elem interface{}) tview.Primitive {
+func moveFocus(dir int) {
+	log.Printf("moving focus %d", dir)
+	focusE := app.GetFocus()
+	focusIx := -1
+	for i := 0; i < mainContent.GetItemCount(); i++ {
+		if focusE == mainContent.GetItem(i) {
+			focusIx = i
+			break
+		}
+	}
+	newIx := focusIx + dir
+	if newIx < 0 {
+		app.SetFocus(urlInput)
+	} else if newIx < mainContent.GetItemCount() {
+		app.SetFocus(mainContent.GetItem(newIx))
+	}
+}
+
+func createItem(elem eth.KeyElem, inputVal []byte) (tview.Primitive, error) {
 	switch e := elem.(type) {
 	case *eth.ElemText:
-		return tview.NewTextView().SetText(e.Text)
+		return tview.NewTextView().SetText(e.Text), nil
 	case *eth.ElemAmount:
-		initText := fmt.Sprintf("%0."+strconv.Itoa(int(e.Decimals))+"d", 0)
-		return tview.NewInputField().SetLabel(e.Label).SetText(initText)
+		label := padRight(e.Label, 24)
+
+		// TODO: arbitrary precision fixed point helper functions
+		dec := int(e.Decimals)
+		strV := strings.Repeat("0", dec) + util.DecodeUint(inputVal).String()
+		decIx := len(strV) - dec
+		initText := strings.TrimLeft(strV[:decIx]+"."+strV[decIx:], "0")
+
+		ret := tview.NewInputField().SetLabel(label).SetText(initText)
+		ret.SetDoneFunc(func(key tcell.Key) {
+			text := ret.GetText()
+			fVal, err := strconv.ParseFloat(text, 64)
+			if err != nil {
+				ret.SetFieldBackgroundColor(bgErr)
+			} else {
+				ret.SetFieldBackgroundColor(colReset)
+				fVal = math.Round(fVal * math.Pow10(dec))
+				val := util.EncodeUint(big.NewInt(int64(fVal)))
+				setInput(e.Key, val)
+			}
+		})
+		return ret, nil
+	case *eth.ElemDropdown:
+		label := padRight(e.Label, 24)
+		ret := tview.NewDropDown().SetLabel(label)
+		initV := util.DecodeUint(inputVal)
+		selIx := -1
+		for i, opt := range e.Options {
+			ret.AddOption(opt.Text, func() {
+				setInput(e.Key, util.EncodeUint(&opt.Val))
+			})
+			if opt.Val.Cmp(initV) == 0 {
+				selIx = i
+			}
+		}
+		ret.SetCurrentOption(selIx)
+		ret.SetFieldBackgroundColor(bgGray)
+		return ret, nil
 	case *eth.ElemButton:
-		return tview.NewButton(e.Text)
+		return tview.NewButton(e.Text).SetSelectedFunc(func() {
+			submit(e.Key)
+		}), nil
 	default:
-		return tview.NewTextView().SetTextColor(bgDarkGray).SetText("Unimplemented")
+		return nil, fmt.Errorf("unimplemented: %t", elem)
 	}
+}
+
+func setInput(key big.Int, val []byte) {
+	act.Dispatch(&act.ActSetInput{Key: key, Val: val})
+}
+
+func submit(buttonKey big.Int) {
+	act.Dispatch(&act.ActSubmit{ButtonKey: buttonKey})
+}
+
+func padRight(label string, width int) string {
+	if len(label) > width {
+		return label[:width-1] + "…"
+	}
+	return label + strings.Repeat(" ", width-len(label))
 }
 
 func renderChain(chain *act.ChainState) {
 	if eth.IsZeroAddr(chain.Account.Addr) {
-		chainAccount.SetText("Not logged in")
+		chainStatus.SetText("Not logged in")
 	} else {
-		chainAccount.SetText(chain.Account.Disp())
+		chainStatus.SetText(chain.Account.Disp())
 	}
 
 	if chain.Conn.ErrorText == "" {
-		statusText := fmt.Sprintf("CONNECTED - %s", chain.Conn.ChainName)
-		chainConnStatus.SetText(statusText).SetBackgroundColor(colReset)
+		statusText := fmt.Sprintf("CONNECTED - %s", strings.ToUpper(chain.Conn.ChainName))
+		footerConnStatus.SetText(statusText).SetBackgroundColor(bgDark)
 	} else {
-		chainConnStatus.SetText("DISCONNECTED").SetBackgroundColor(bgErr)
+		footerConnStatus.SetText("DISCONNECTED").SetBackgroundColor(bgErr)
 	}
 }

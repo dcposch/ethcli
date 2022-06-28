@@ -22,8 +22,8 @@ type ElemTs []abi.ArgumentMarshaling
 var (
 	PropsText     = ElemTs{{Name: "key", Type: "uint256"}, {Name: "text", Type: "string"}}
 	PropsAmount   = ElemTs{{Name: "key", Type: "uint256"}, {Name: "label", Type: "string"}, {Name: "decimals", Type: "uint64"}}
-	DropOpt       = ElemTs{{Name: "val", Type: "uint256"}, {Name: "text", Type: "string"}}
-	PropsDropdown = ElemTs{{Name: "key", Type: "uint256"}, {Name: "label", Type: "string"}, {Name: "options", Type: "tuple[]", Components: DropOpt}}
+	PropsDropOpt  = ElemTs{{Name: "val", Type: "uint256"}, {Name: "text", Type: "string"}}
+	PropsDropdown = ElemTs{{Name: "key", Type: "uint256"}, {Name: "label", Type: "string"}, {Name: "options", Type: "tuple[]", Components: PropsDropOpt}}
 	PropsButton   = ElemTs{{Name: "key", Type: "uint256"}, {Name: "text", Type: "string"}}
 )
 
@@ -60,43 +60,63 @@ type VElem struct {
 	// Raw ABI-encoded data. Text for a text field, options for a dropdown, etc.
 	Data []byte
 	// Parsed data. See ElemText, etc.
-	DataElem interface{}
+	DataElem KeyElem
 }
 
-type Elem struct {
+type elem struct {
 	Key big.Int
 }
 
+type KeyElem interface {
+	GetKey() big.Int
+}
+
 type ElemText struct {
-	Elem
+	elem
 	Text string
 }
 
+func (e *ElemText) GetKey() big.Int {
+	return e.Key
+}
+
 type ElemAmount struct {
-	Elem
+	elem
 	Label string
 	// Amount input will return fixed-point uint256 to n decimals.
 	Decimals uint64
 }
 
-type ElemDropdown struct {
-	Elem
-	Label string
-	// Options. User must pick one.
-	Options []ElemDropOption
+func (e *ElemAmount) GetKey() big.Int {
+	return e.Key
 }
 
-type ElemDropOption struct {
+type ElemDropdown struct {
+	elem
+	Label string
+	// Options. User must pick one.
+	Options []DropOption
+}
+
+func (e *ElemDropdown) GetKey() big.Int {
+	return e.Key
+}
+
+type DropOption struct {
 	// Dropdown option value
 	Val big.Int
 	// Dropdown option display string
-	Display string
+	Text string
 }
 
 type ElemButton struct {
-	Elem
+	elem
 	// Button label
 	Text string
+}
+
+func (e *ElemButton) GetKey() big.Int {
+	return e.Key
 }
 
 type ButtonAction struct {

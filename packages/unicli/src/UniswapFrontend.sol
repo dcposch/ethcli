@@ -22,7 +22,7 @@ contract UniswapFrontend is IFrontend {
         vdom[0] = V.Text(1, "HELLO WORLD");
         vdom[1] = V.Amount(2, "Amount in", 18);
         vdom[2] = V.Dropdown(3, "Token in", _tokens());
-        vdom[3] = V.Dropdown(3, "Token out", _tokens());
+        vdom[3] = V.Dropdown(4, "Token out", _tokens());
         vdom[4] = V.Button(5, "Swap");
     }
 
