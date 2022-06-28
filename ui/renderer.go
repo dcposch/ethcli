@@ -32,6 +32,8 @@ var (
 	mainContent      *tview.Flex
 	footerConnStatus *tview.TextView
 	footerMain       *tview.TextView
+	pages            *tview.Pages
+	modalConfirm     *tview.Modal
 )
 
 func StartRenderer() {
@@ -63,8 +65,22 @@ func StartRenderer() {
 	grid.AddItem(footerMain, 2, 1, 1, 1, 0, 0, false)
 	grid.AddItem(tview.NewTextView(), 2, 2, 1, 1, 0, 0, false)
 
+	modalConfirm = tview.NewModal().
+		AddButtons([]string{"Confirm", "Cancel"}).
+		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
+			if buttonIndex == 0 {
+				txModalConfirm()
+			} else {
+				txModalCancel()
+			}
+		})
+
+	pages = tview.NewPages().
+		AddPage("main", grid, true, true).
+		AddPage("modal", modalConfirm, true, false)
+
 	app = tview.NewApplication().
-		SetRoot(grid, true).
+		SetRoot(pages, true).
 		EnableMouse(true)
 
 	// Tab order
@@ -103,13 +119,41 @@ func Render(state *act.State) {
 			state.Tab.EnteredAddr, state.Tab.ContractAddr, state.Tab.ErrorText,
 			len(state.Tab.Vdom))
 
-		renderTab(&state.Tab)
 		renderChain(&state.Chain)
+		renderTab(&state.Tab)
+		renderModal(state)
 
 		lastState = state
 		lastStateStr = stateStr
 		isRendering = false
 	})
+}
+
+func txModalConfirm() {
+	act.Dispatch(&act.ActExecTx{})
+}
+
+func txModalCancel() {
+	act.Dispatch(&act.ActCancelTx{})
+}
+
+func renderModal(state *act.State) {
+	propTx := state.Tab.ProposedTx
+	pendTx := state.Tab.PendingTx
+
+	if propTx == nil && pendTx == nil {
+		pages.HidePage("modal")
+	} else if state.Chain.PrivateKey == nil {
+		pages.ShowPage("modal")
+		modalConfirm.SetText("You must be logged in to submit transactions.")
+	} else {
+		pages.ShowPage("modal")
+		if propTx != nil {
+			modalConfirm.SetText(fmt.Sprintf("Confirm transaction to %s?", propTx.To))
+		} else {
+			modalConfirm.SetText(fmt.Sprintf("Transaction %s pending...", pendTx.Hash()))
+		}
+	}
 }
 
 func renderTab(tab *act.TabState) {
@@ -256,10 +300,10 @@ func padRight(label string, width int) string {
 }
 
 func renderChain(chain *act.ChainState) {
-	if eth.IsZeroAddr(chain.Account.Addr) {
+	if chain.PrivateKey == nil {
 		chainStatus.SetText("Not logged in")
 	} else {
-		chainStatus.SetText(chain.Account.Disp())
+		chainStatus.SetText("🔑 " + chain.Account.Disp())
 	}
 
 	if chain.Conn.ErrorText == "" {

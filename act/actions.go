@@ -1,12 +1,13 @@
 package act
 
 import (
+	"context"
+	"fmt"
 	"log"
 	"strings"
 
 	"dcposch.eth/cli/eth"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
 // Represents a single user action.
@@ -66,18 +67,70 @@ type ActSubmit struct {
 
 func (a *ActSubmit) Run() {
 	inputs := state.Tab.Inputs
-	log.Printf("act Submit %d", a.ButtonKey)
-
 	appState := []byte{}
 	contractAddr := *state.Tab.ContractAddr
 	action := eth.ButtonAction{ButtonKey: a.ButtonKey, Inputs: inputs}
-	newAppState, err := client.FrontendSubmit(state.Chain.Account.Addr, contractAddr, appState, action)
-	log.Printf("act Submit %d result %v err %v", a.ButtonKey, hexutil.Encode(newAppState), err)
+	callMsg, err := client.FrontendSubmit(state.Chain.Account.Addr, contractAddr, appState, action)
+	log.Printf("act Submit %d err %v", a.ButtonKey, err)
 
 	if err == nil {
 		state.Tab.AppErrorText = ""
+		state.Tab.ProposedTx = callMsg
 	} else {
 		state.Tab.AppErrorText = err.Error()
+	}
+
+	render()
+}
+
+type ActExecTx struct {
+}
+
+func (a *ActExecTx) Run() {
+	tx, err := client.Execute(state.Tab.ProposedTx, state.Chain.PrivateKey)
+	state.Tab.ProposedTx = nil
+	if err == nil {
+		state.Tab.PendingTx = tx
+	} else {
+		state.Tab.PendingTx = nil
+		state.Tab.ErrorText = err.Error()
+	}
+
+	render()
+}
+
+type ActCancelTx struct {
+}
+
+func (a *ActCancelTx) Run() {
+	state.Tab.ProposedTx = nil
+	state.Tab.PendingTx = nil
+
+	render()
+}
+
+func reloadTxState() {
+	tx := state.Tab.PendingTx
+	if tx == nil {
+		return
+	}
+	ctx := context.Background()
+
+	receipt, err := client.Ec.TransactionReceipt(ctx, tx.Hash())
+	if err != nil {
+		log.Printf("act reloadTxState error %v", err)
+		return
+	}
+	if receipt == nil {
+		return
+	}
+
+	log.Printf("act reloadTxState got receipt %s %+v", tx.Hash(), receipt)
+
+	// Transaction confirmed or reverted
+	state.Tab.PendingTx = nil
+	if receipt.Status == 0 {
+		state.Tab.ErrorText = fmt.Sprintf("transaction reverted: %s", tx.Hash())
 	}
 
 	render()
@@ -86,7 +139,8 @@ func (a *ActSubmit) Run() {
 // Reload context information about the blockchain.
 func reloadChainState() {
 	state.Chain.Conn = client.ConnStatus()
-	state.Chain.Account = eth.NamedAddr{}
+
+	render()
 }
 
 func reloadTab() {

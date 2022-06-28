@@ -28,7 +28,7 @@ func main() {
 	client := eth.CreateClient(opts.ethRpcUrl)
 
 	// Initialize browser state. One-way data flow: action > state > render.
-	act.Init(client, ui.Render)
+	act.Init(client, opts.privateKey, ui.Render)
 
 	// Show a terminal dapp browser
 	ui.StartRenderer()

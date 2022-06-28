@@ -1,8 +1,12 @@
 package act
 
 import (
+	"crypto/ecdsa"
+
 	"dcposch.eth/cli/eth"
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 // Browser state
@@ -13,6 +17,8 @@ type State struct {
 
 // Ethereum chain connection state
 type ChainState struct {
+	// logged-in account key
+	PrivateKey *ecdsa.PrivateKey
 	// logged-in account, eg vitalik.eth
 	Account eth.NamedAddr
 	// connection status, chain ID, etc
@@ -33,4 +39,8 @@ type TabState struct {
 	Vdom []eth.VElem
 	// ABI-encoded user inputs. Inputs[k] == nil if user hasn't entered anything for key k.
 	Inputs [][]byte
+	// Shows confirmation modal.
+	ProposedTx *ethereum.CallMsg
+	// Sent transaction, waiting for block confirmation.
+	PendingTx *types.Transaction
 }

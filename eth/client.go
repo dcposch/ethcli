@@ -1,6 +1,7 @@
 package eth
 
 import (
+	"crypto/ecdsa"
 	"fmt"
 	"log"
 	"math/big"
@@ -11,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/params"
 	ens "github.com/wealdtech/go-ens/v3"
@@ -19,7 +21,8 @@ import (
 
 // A caching Ethereum client. Forwards requests to a JSON RPC client.
 type Client struct {
-	Ec *ethclient.Client
+	Ec             *ethclient.Client
+	LastConnStatus ConnStatus
 }
 
 func CreateClient(ethRpcUrl string) *Client {
@@ -35,14 +38,15 @@ func (c *Client) ConnStatus() ConnStatus {
 	ctx, _ := context.WithTimeout(context.Background(), time.Second)
 	cid, err := c.Ec.ChainID(ctx)
 	if err != nil {
-		return ConnStatus{0, "", err.Error()}
+		c.LastConnStatus = ConnStatus{0, "", err.Error()}
 	} else {
 		name := params.NetworkNames[cid.String()]
 		if name == "" {
 			name = fmt.Sprintf("CHAIN ID %d", cid)
 		}
-		return ConnStatus{cid.Int64(), name, ""}
+		c.LastConnStatus = ConnStatus{cid.Int64(), name, ""}
 	}
+	return c.LastConnStatus
 }
 
 type ConnStatus struct {
@@ -98,13 +102,13 @@ func (c *Client) FrontendRender(fromAddr, contractAddr common.Address, appState 
 	return
 }
 
-func (c *Client) FrontendSubmit(fromAddr, contractAddr common.Address, appState []byte, action ButtonAction) (newAppState []byte, err error) {
-	abiAction = struct {
+func (c *Client) FrontendSubmit(fromAddr, contractAddr common.Address, appState []byte, action ButtonAction) (msg *ethereum.CallMsg, err error) {
+	abiAction := struct {
 		ButtonKey *big.Int
 		Inputs    [][]byte
 	}{
 		ButtonKey: big.NewInt(int64(action.ButtonKey)),
-		Inputs:    action.Inputs
+		Inputs:    action.Inputs,
 	}
 	data, err := abiIFrontend.Pack("act", appState, abiAction)
 	if err != nil {
@@ -117,8 +121,65 @@ func (c *Client) FrontendSubmit(fromAddr, contractAddr common.Address, appState 
 		To:   &contractAddr,
 		Data: data,
 	}
-	newAppState, err = c.Ec.CallContract(context.Background(), callMsg, nil)
-	return newAppState, err
+	_, err = c.Ec.CallContract(context.Background(), callMsg, nil)
+
+	return &callMsg, err
+}
+
+func (c *Client) Execute(msg *ethereum.CallMsg, prv *ecdsa.PrivateKey) (*types.Transaction, error) {
+	ctx := context.Background()
+
+	nonce, err := c.Ec.PendingNonceAt(ctx, msg.From)
+	if err != nil {
+		return nil, fmt.Errorf("nonce %s", err)
+	}
+	gasPrice, err := c.Ec.SuggestGasPrice(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("price %s", err)
+	}
+	gas, err := c.Ec.EstimateGas(ctx, *msg)
+	if err != nil {
+		return nil, fmt.Errorf("gas %s", err)
+	}
+
+	// Infura gives "method not suppported"
+	// gasTipCap, err := c.Ec.SuggestGasTipCap(ctx)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("tip %s", err)
+	// }
+	gasTipCap := big.NewInt(2_000_000_000) // 2 gwei
+	if gasTipCap.Cmp(gasPrice) > 0 {
+		gasTipCap.SetInt64(0)
+	}
+
+	chainID := big.NewInt(c.LastConnStatus.ChainID)
+	tx := types.NewTx(&types.DynamicFeeTx{
+		ChainID:   chainID,
+		Nonce:     nonce,
+		GasFeeCap: gasPrice,
+		GasTipCap: gasTipCap,
+		Gas:       gas,
+		To:        msg.To,
+		Value:     msg.Value,
+		Data:      msg.Data,
+	})
+
+	log.Printf("eth SIGNING TRANSACTION. chain %d nonce %d fee cap %s tip %s gas %d from %s to %s",
+		chainID,
+		nonce,
+		gasPrice,
+		gasTipCap,
+		gas,
+		msg.From,
+		msg.To,
+	)
+
+	txS, err := types.SignTx(tx, types.NewLondonSigner(chainID), prv)
+	if err != nil {
+		return nil, err
+	}
+
+	return txS, c.Ec.SendTransaction(ctx, txS)
 }
 
 func unpackElem(v *VElem) error {
