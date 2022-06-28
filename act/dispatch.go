@@ -35,8 +35,12 @@ func setPrivateKey(prv *ecdsa.PrivateKey) {
 }
 
 func Dispatch(a Action) {
-	log.Printf("action %#v", a)
-	queue <- a
+	select {
+	case queue <- a:
+		log.Printf("action %#v", a)
+	default:
+		log.Printf("DROPPING action %#v", a)
+	}
 }
 
 func run() {
