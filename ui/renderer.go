@@ -88,6 +88,8 @@ func onDoneUrlInput(key tcell.Key) {
 	}
 }
 
+var isRendering = false
+
 func Render(state *act.State) {
 	// TODO: better diff
 	stateStr := fmt.Sprintf("%#v", state)
@@ -96,20 +98,17 @@ func Render(state *act.State) {
 	}
 
 	app.QueueUpdateDraw(func() {
+		isRendering = true
 		log.Printf("ui Render %#v URL %s %s err '%s' elems %d", state.Chain,
 			state.Tab.EnteredAddr, state.Tab.ContractAddr, state.Tab.ErrorText,
 			len(state.Tab.Vdom))
 
 		renderTab(&state.Tab)
 		renderChain(&state.Chain)
-		if len(state.Tab.Vdom) > 0 {
-			app.SetFocus(mainContent.GetItem(0))
-		} else {
-			app.SetFocus(urlInput)
-		}
 
 		lastState = state
 		lastStateStr = stateStr
+		isRendering = false
 	})
 }
 
@@ -131,7 +130,7 @@ func renderTab(tab *act.TabState) {
 	if errText == "" && tab.Vdom != nil {
 		for _, v := range tab.Vdom {
 			key := v.DataElem.GetKey()
-			inputVal := tab.Inputs[key.String()]
+			inputVal := tab.Inputs[key]
 			item, err := createItem(v.DataElem, inputVal)
 			if err != nil {
 				errText = err.Error()
@@ -151,8 +150,22 @@ func renderTab(tab *act.TabState) {
 	mainContent.AddItem(tview.NewTextView(), 0, 1, false)
 }
 
+func resetFocus() {
+	app.SetFocus(urlInput)
+}
+
 func moveFocus(dir int) {
 	log.Printf("moving focus %d", dir)
+	focusIx := getFocusIx()
+	newIx := focusIx + dir
+	if newIx < 0 {
+		app.SetFocus(urlInput)
+	} else if newIx < mainContent.GetItemCount() {
+		app.SetFocus(mainContent.GetItem(newIx))
+	}
+}
+
+func getFocusIx() int {
 	focusE := app.GetFocus()
 	focusIx := -1
 	for i := 0; i < mainContent.GetItemCount(); i++ {
@@ -161,12 +174,7 @@ func moveFocus(dir int) {
 			break
 		}
 	}
-	newIx := focusIx + dir
-	if newIx < 0 {
-		app.SetFocus(urlInput)
-	} else if newIx < mainContent.GetItemCount() {
-		app.SetFocus(mainContent.GetItem(newIx))
-	}
+	return focusIx
 }
 
 func createItem(elem eth.KeyElem, inputVal []byte) (tview.Primitive, error) {
@@ -176,15 +184,15 @@ func createItem(elem eth.KeyElem, inputVal []byte) (tview.Primitive, error) {
 	case *eth.ElemAmount:
 		label := padRight(e.Label, 24)
 
-		// TODO: arbitrary precision fixed point helper functions
 		dec := int(e.Decimals)
-		strV := strings.Repeat("0", dec) + util.DecodeUint(inputVal).String()
-		decIx := len(strV) - dec
-		initText := strings.TrimLeft(strV[:decIx]+"."+strV[decIx:], "0")
-
+		initText := util.ToFixedPrecision(util.DecodeUint(inputVal), dec)
 		ret := tview.NewInputField().SetLabel(label).SetText(initText)
 		ret.SetDoneFunc(func(key tcell.Key) {
+			if isRendering {
+				return
+			}
 			text := ret.GetText()
+			log.Printf("amount Done: %d %s", e.Key, text)
 			fVal, err := strconv.ParseFloat(text, 64)
 			if err != nil {
 				ret.SetFieldBackgroundColor(bgErr)
@@ -194,6 +202,9 @@ func createItem(elem eth.KeyElem, inputVal []byte) (tview.Primitive, error) {
 				val := util.EncodeUint(big.NewInt(int64(fVal)))
 				setInput(e.Key, val)
 			}
+			if key == tcell.KeyEnter {
+				moveFocus(1)
+			}
 		})
 		return ret, nil
 	case *eth.ElemDropdown:
@@ -202,8 +213,12 @@ func createItem(elem eth.KeyElem, inputVal []byte) (tview.Primitive, error) {
 		initV := util.DecodeUint(inputVal)
 		selIx := -1
 		for i, opt := range e.Options {
+			val := opt.Val
 			ret.AddOption(opt.Text, func() {
-				setInput(e.Key, util.EncodeUint(&opt.Val))
+				if isRendering {
+					return
+				}
+				setInput(e.Key, util.EncodeUint(val))
 			})
 			if opt.Val.Cmp(initV) == 0 {
 				selIx = i
@@ -214,6 +229,9 @@ func createItem(elem eth.KeyElem, inputVal []byte) (tview.Primitive, error) {
 		return ret, nil
 	case *eth.ElemButton:
 		return tview.NewButton(e.Text).SetSelectedFunc(func() {
+			if isRendering {
+				return
+			}
 			submit(e.Key)
 		}), nil
 	default:
@@ -221,11 +239,12 @@ func createItem(elem eth.KeyElem, inputVal []byte) (tview.Primitive, error) {
 	}
 }
 
-func setInput(key big.Int, val []byte) {
+func setInput(key uint8, val []byte) {
 	act.Dispatch(&act.ActSetInput{Key: key, Val: val})
 }
 
-func submit(buttonKey big.Int) {
+func submit(buttonKey uint8) {
+	resetFocus()
 	act.Dispatch(&act.ActSubmit{ButtonKey: buttonKey})
 }
 

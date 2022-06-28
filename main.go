@@ -68,7 +68,6 @@ func startLogging(path string) {
 	}
 	util.Must(err)
 
-	log.SetPrefix("ethcli")
 	log.SetFlags(log.LstdFlags | log.LUTC | log.Lmicroseconds)
 	log.Printf("Writing log output to %s", logFile.Name())
 	log.SetOutput(logFile)

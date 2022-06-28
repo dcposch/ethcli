@@ -21,9 +21,16 @@ type ChainState struct {
 
 // Tab state
 type TabState struct {
-	EnteredAddr  string
+	// User entry in URL bar
+	EnteredAddr string
+	// Resolved contract addresss
 	ContractAddr *common.Address
-	ErrorText    string
-	Vdom         []eth.VElem
-	Inputs       map[string][]byte
+	// Error loading the app
+	ErrorText string
+	// Error within the app
+	AppErrorText string
+	// The displayed app, as returned by the contract render()
+	Vdom []eth.VElem
+	// ABI-encoded user inputs. Inputs[k] == nil if user hasn't entered anything for key k.
+	Inputs [][]byte
 }

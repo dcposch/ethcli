@@ -64,11 +64,11 @@ type VElem struct {
 }
 
 type elem struct {
-	Key big.Int
+	Key uint8
 }
 
 type KeyElem interface {
-	GetKey() big.Int
+	GetKey() uint8
 }
 
 type ElemText struct {
@@ -76,7 +76,7 @@ type ElemText struct {
 	Text string
 }
 
-func (e *ElemText) GetKey() big.Int {
+func (e *ElemText) GetKey() uint8 {
 	return e.Key
 }
 
@@ -87,7 +87,7 @@ type ElemAmount struct {
 	Decimals uint64
 }
 
-func (e *ElemAmount) GetKey() big.Int {
+func (e *ElemAmount) GetKey() uint8 {
 	return e.Key
 }
 
@@ -98,13 +98,13 @@ type ElemDropdown struct {
 	Options []DropOption
 }
 
-func (e *ElemDropdown) GetKey() big.Int {
+func (e *ElemDropdown) GetKey() uint8 {
 	return e.Key
 }
 
 type DropOption struct {
 	// Dropdown option value
-	Val big.Int
+	Val *big.Int
 	// Dropdown option display string
 	Text string
 }
@@ -115,13 +115,13 @@ type ElemButton struct {
 	Text string
 }
 
-func (e *ElemButton) GetKey() big.Int {
+func (e *ElemButton) GetKey() uint8 {
 	return e.Key
 }
 
 type ButtonAction struct {
 	// Which button was pressed.
-	ButtonKey uint64
+	ButtonKey uint8
 	// ABI serialization of each input.
 	Inputs [][]byte
 }

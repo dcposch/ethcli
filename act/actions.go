@@ -2,11 +2,11 @@ package act
 
 import (
 	"log"
-	"math/big"
 	"strings"
 
 	"dcposch.eth/cli/eth"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
 // Represents a single user action.
@@ -27,6 +27,7 @@ func (a *ActSetUrl) Run() {
 	tab.EnteredAddr = url
 	tab.ErrorText = ""
 	tab.ContractAddr = nil
+	tab.AppErrorText = ""
 
 	// Navigation is always to a UI contract.
 	// User either enters an address directly, or an ENS name.
@@ -44,29 +45,42 @@ func (a *ActSetUrl) Run() {
 	} else {
 		tab.EnteredAddr = ""
 	}
-	tab.Inputs = make(map[string][]byte)
 
 	reloadTab()
 }
 
 // Update a form input.
 type ActSetInput struct {
-	Key big.Int
+	Key uint8
 	Val []byte
 }
 
 func (a *ActSetInput) Run() {
-	state.Tab.Inputs[a.Key.String()] = a.Val
+	state.Tab.Inputs[a.Key] = a.Val
 }
 
 // Submit a form.
 type ActSubmit struct {
-	ButtonKey big.Int
+	ButtonKey uint8
 }
 
 func (a *ActSubmit) Run() {
-	// TODO: construct act() transaction
-	log.Printf("act Submit %s %#v", a.ButtonKey.String(), state.Tab.Inputs)
+	inputs := state.Tab.Inputs
+	log.Printf("act Submit %d", a.ButtonKey)
+
+	appState := []byte{}
+	contractAddr := *state.Tab.ContractAddr
+	action := eth.ButtonAction{ButtonKey: a.ButtonKey, Inputs: inputs}
+	newAppState, err := client.FrontendSubmit(state.Chain.Account.Addr, contractAddr, appState, action)
+	log.Printf("act Submit %d result %v err %v", a.ButtonKey, hexutil.Encode(newAppState), err)
+
+	if err == nil {
+		state.Tab.AppErrorText = ""
+	} else {
+		state.Tab.AppErrorText = err.Error()
+	}
+
+	render()
 }
 
 // Reload context information about the blockchain.
@@ -84,13 +98,16 @@ func reloadTab() {
 	vdom, err := client.FrontendRender(
 		state.Chain.Account.Addr, *state.Tab.ContractAddr, appState)
 	if err == nil {
-		// TODO: vdom diffing
 		state.Tab.Vdom = vdom
 		state.Tab.ErrorText = ""
-		for _, v := range vdom {
-			key := v.DataElem.(eth.KeyElem).GetKey()
-			state.Tab.Inputs[key.String()] = []byte{}
+
+		maxId := uint8(0)
+		for _, v := range state.Tab.Vdom {
+			if v.DataElem.GetKey() > maxId {
+				maxId = v.DataElem.GetKey()
+			}
 		}
+		state.Tab.Inputs = make([][]byte, maxId+1)
 	} else {
 		state.Tab.Vdom = nil
 		state.Tab.ErrorText = err.Error()
