@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"math"
@@ -24,8 +25,6 @@ const (
 )
 
 var (
-	lastState        *act.State
-	lastStateStr     string
 	app              *tview.Application
 	urlInput         *tview.InputField
 	chainStatus      *tview.TextView
@@ -34,6 +33,12 @@ var (
 	footerMain       *tview.TextView
 	pages            *tview.Pages
 	modalConfirm     *tview.Modal
+)
+
+var (
+	lastState    *act.State
+	lastVdom     []eth.VElem
+	lastStateStr string
 )
 
 func StartRenderer() {
@@ -124,6 +129,8 @@ func Render(state *act.State) {
 		renderModal(state)
 
 		lastState = state
+		lastVdom = make([]eth.VElem, len(state.Tab.Vdom))
+		copy(lastVdom, state.Tab.Vdom)
 		lastStateStr = stateStr
 		isRendering = false
 	})
@@ -141,18 +148,26 @@ func renderModal(state *act.State) {
 	propTx := state.Tab.ProposedTx
 	pendTx := state.Tab.PendingTx
 
+	var show bool
 	if propTx == nil && pendTx == nil {
-		pages.HidePage("modal")
+		show = false
 	} else if state.Chain.PrivateKey == nil {
-		pages.ShowPage("modal")
+		show = true
 		modalConfirm.SetText("You must be logged in to submit transactions.")
 	} else {
-		pages.ShowPage("modal")
+		show = true
 		if propTx != nil {
 			modalConfirm.SetText(fmt.Sprintf("Confirm transaction to %s?", propTx.To))
 		} else {
 			modalConfirm.SetText(fmt.Sprintf("Transaction %s pending...", pendTx.Hash()))
 		}
+	}
+
+	frontPage, _ := pages.GetFrontPage()
+	if show && (frontPage != "modal") {
+		pages.ShowPage("modal")
+	} else if !show && (frontPage == "modal") {
+		pages.HidePage("modal")
 	}
 }
 
@@ -169,10 +184,28 @@ func renderTab(tab *act.TabState) {
 		footerMain.SetBackgroundColor(bgErr)
 	}
 
-	mainContent.Clear()
 	errText := tab.ErrorText
 	if errText == "" && tab.Vdom != nil {
-		for _, v := range tab.Vdom {
+		// TODO: update tview to support item replacement and insertion
+		// currently it only allows append + delete, which is not enough to
+		// implement vdom diffing.
+		hasClearedRest := false
+		for i, v := range tab.Vdom {
+			if len(lastVdom) > i && lastVdom[i].TypeHash == v.TypeHash && bytes.Equal(lastVdom[i].Data, v.Data) {
+				// match, skip
+				continue
+			} else if !hasClearedRest {
+				nElems := mainContent.GetItemCount()
+				log.Printf("Rendering tab elems. Matched %d, deleting %d, adding %d",
+					i, nElems-i, len(tab.Vdom)-i)
+				for mainContent.GetItemCount() > i {
+					// tview API is incomplete, making usage ugly
+					mainContent.RemoveItem(mainContent.GetItem(mainContent.GetItemCount() - 1))
+				}
+				hasClearedRest = true
+			}
+
+			// Add newly created item
 			key := v.DataElem.GetKey()
 			inputVal := tab.Inputs[key]
 			item, err := createItem(v.DataElem, inputVal)
@@ -194,14 +227,10 @@ func renderTab(tab *act.TabState) {
 	mainContent.AddItem(tview.NewTextView(), 0, 1, false)
 }
 
-func resetFocus() {
-	app.SetFocus(urlInput)
-}
-
 func moveFocus(dir int) {
-	log.Printf("moving focus %d", dir)
 	focusIx := getFocusIx()
 	newIx := focusIx + dir
+	log.Printf("set focus %d", newIx)
 	if newIx < 0 {
 		app.SetFocus(urlInput)
 	} else if newIx < mainContent.GetItemCount() {
@@ -221,16 +250,23 @@ func getFocusIx() int {
 	return focusIx
 }
 
+func setAmount(input *tview.InputField, elem *eth.ElemAmount, val *big.Int) {
+	dec := int(elem.Decimals)
+	initText := util.ToFixedPrecision(val, dec)
+	input.SetText(initText)
+}
+
 func createItem(elem eth.KeyElem, inputVal []byte) (tview.Primitive, error) {
 	switch e := elem.(type) {
 	case *eth.ElemText:
 		return tview.NewTextView().SetText(e.Text), nil
 	case *eth.ElemAmount:
 		label := padRight(e.Label, 24)
+		ret := tview.NewInputField().SetLabel(label)
 
-		dec := int(e.Decimals)
-		initText := util.ToFixedPrecision(util.DecodeUint(inputVal), dec)
-		ret := tview.NewInputField().SetLabel(label).SetText(initText)
+		initVal := util.DecodeUint(inputVal)
+		setAmount(ret, e, initVal)
+
 		ret.SetDoneFunc(func(key tcell.Key) {
 			if isRendering {
 				return
@@ -242,9 +278,11 @@ func createItem(elem eth.KeyElem, inputVal []byte) (tview.Primitive, error) {
 				ret.SetFieldBackgroundColor(bgErr)
 			} else {
 				ret.SetFieldBackgroundColor(colReset)
-				fVal = math.Round(fVal * math.Pow10(dec))
-				val := util.EncodeUint(big.NewInt(int64(fVal)))
-				setInput(e.Key, val)
+				fVal = math.Round(fVal * math.Pow10(int(e.Decimals)))
+				val := big.NewInt(int64(fVal))
+				setAmount(ret, e, val)
+
+				setInput(e.Key, util.EncodeUint(val))
 			}
 			if key == tcell.KeyEnter {
 				moveFocus(1)
@@ -288,7 +326,8 @@ func setInput(key uint8, val []byte) {
 }
 
 func submit(buttonKey uint8) {
-	resetFocus()
+	log.Printf("handling Submit, resetting focus")
+	app.SetFocus(urlInput)
 	act.Dispatch(&act.ActSubmit{ButtonKey: buttonKey})
 }
 

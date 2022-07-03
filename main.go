@@ -65,6 +65,7 @@ func startLogging(path string) {
 		logFile, err = os.CreateTemp("", "eth-*")
 	} else {
 		logFile, err = os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
+		logFile.Write([]byte("\n\n\n")) // easier to tail across runs
 	}
 	util.Must(err)
 
